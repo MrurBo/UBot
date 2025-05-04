@@ -41,26 +41,19 @@ UBoat Bot/
    cd UBoat-Bot
    ```
 
-2. **Install Docker (skip this step if already installed)**:
-   Install Docker on your system via:
-   ```bash
-   winget install --id Docker.DockerDesktop
-   ```
-   or on Linux (Debain);
-   ```bash
-   sudo apt install docker
-   ```
+2. **Install python (skip this step if already installed)**:
+   Install python by visiting `https://python.org/downloads`
 
-3. **Build the Docker Image**:
-   Build the Docker Image via
+3. **Install dependencies**:
+   Install dependencies via
    ```bash
-   docker build
+   pip install -r requirements.txt
    ```
 
 4. **Run the Bot**:
    Start the bot using the following command:
    ```bash
-   docker run -p 5000:5000 -p 8080:8080 (the file name generated)
+   python run.py
    ```
 
 5. **Access the Web Interface**:
