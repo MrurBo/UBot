@@ -37,7 +37,7 @@ UBoat Bot/
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/your-repo/UBoat-Bot.git
+   git clone https://github.com/MrurBo/UBoat-Bot.git
    cd UBoat-Bot
    ```
 
