@@ -16,6 +16,14 @@ class Workspace:
         self._fetch()
         return self.db[self.workspace].get(key)
 
+    def keys(self):
+        self._fetch()
+        return self.db[self.workspace].keys()
+
+    def values(self):
+        self._fetch()
+        return self.db[self.workspace]
+
     def _update(self):
         json.dump(self.db, open("./db.json", "w"))
 

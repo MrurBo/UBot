@@ -1,121 +1,113 @@
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify
+from flask import Flask, request, jsonify
 import dbman
-import hmac
-import hashlib
+import math
+import main
 
-# An api wrapper to add U-Boat games to the db to be accesed from the bot and wesbsite.
-# Will be fexible for columns. first column is the id of the game, 2nd will be the amount of axis players, 3rd will be the amount of allies players, 4th will be uboats, 5th will be ships, 6th will be a list of steamid's, 6th will be axis score, 7th will be allies score. the rest will be added later.
 
-workspace = dbman.Workspace("games")
-passwords = dbman.Workspace("passwords")
 app = Flask(__name__)
-app.secret_key = "rahh"
+
+currentGame = dbman.Workspace("currentGame")
+teams = dbman.Workspace("teams")
+currentGame.set("players", {})
+teams.set("team1", {})
+teams.set("team2", {})
+teams.set("team3", {})
+teams.set("team4", {})
+teams.set("team5", {})
+teams.set("team6", {})
 
 
-def generate_user_token(username, password):
-    # Create a secret key (store this securely in your application)
+@app.route("/api/v1/join_game", methods=["GET"])
+def join():
+    if currentGame.get("players") == None:
+        currentGame.set("players", {})
+    old = currentGame.get("players")
+    old[str(request.args.get("steamID"))] = {
+        "name": request.args.get("name"),
+        "team": None,
+        "crewID": None,
+        "torpedo_hits": 0,
+        "ships_disabled": 0,
+        "ships_sunk": 0,
+        "score": 0,
+    }
+    currentGame.set("players", old)
+    return "", 200
 
-    # Combine username and password with a delimiter
-    message = f"{username}:{password}".encode("utf-8")
 
-    # Create HMAC using SHA-256
-    token = hmac.new(
-        app.secret_key.encode(), msg=message, digestmod=hashlib.sha256
-    ).hexdigest()
-
-    return token
-
-
-@app.route("/api/v1/add_game", methods=["GET"])
-def add_game():
-    game_id = request.args.get("game_id")
-    axis = request.args.get("axis")
-    allies = request.args.get("allies")
-    uboats = request.args.get("uboats")
-    ships = request.args.get("ships")
-    steamids = request.args.get("steamids")
-    axis_score = request.args.get("axis_score")
-    allies_score = request.args.get("allies_score")
-
-    if not game_id or not axis or not allies or not uboats or not ships or not steamids:
-        return "Missing parameters", 400
-
-    workspace.set(
-        game_id, [axis, allies, uboats, ships, steamids, axis_score, allies_score]
+@app.route("/api/v1/update", methods=["GET"])
+def update():
+    old = currentGame.get("players")
+    data = request.args
+    old2 = old[str(request.args.get("steamID"))]
+    if old2 == None:
+        return "", 400
+    old2["torpedo_hits"] = int(data.get("torpedo_hits"))
+    old2["ships_disabled"] = int(data.get("ships_disabled"))
+    old2["ships_sunk"] = int(data.get("ships_sunk"))
+    old2["score"] = math.floor(
+        old2["torpedo_hits"] * 5 + old2["ships_disabled"] * 20 + old2["ships_sunk"] * 50
     )
-    return "Game added", 200
+    currentGame.set("players", old)
+    return "", 200
 
 
-@app.route("/api/v1/update_scores", methods=["GET"])
-def update_scores():
-    game_id = request.args.get("game_id")
-    axis = request.args.get("axisScore")
-    allies = request.args.get("alliesScore")
-
-    if not game_id or not axis or not allies:
-        return "Missing parameters", 400
-
-    game = workspace.get(game_id)
-    if not game:
-        return "Game not found", 404
-
-    game[5] = axis
-    game[6] = allies
-    workspace.set(game_id, game)
-    return "Scores updated", 200
+@app.route("/api/v1/leave_game", methods=["GET"])
+def leave():
+    old = currentGame.get("players")
+    del old[str(request.args.get("steamID"))]
+    currentGame.set("players", old)
+    return "", 200
 
 
-# login page
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        # use new passwords workspace
-        if passwords.get(username) == None:
-            return "Invalid username or password", 401
-        if passwords.get(username) != password:
-            return "Invalid username or password", 401
-        session["logged_in"] = True
-        session["username"] = username
-        session["token"] = generate_user_token(username, password)
-        return redirect(url_for("index"))
-    # if the user is already logged in, redirect to index
-
-    return render_template("login.html")
+@app.route("/api/v1/change_teams", methods=["GET"])
+def change_teams():
+    old = currentGame.get("players")
+    print(request.args)
+    old[str(request.args.get("steamID"))]["team"] = request.args.get("team")
+    print(old)
+    currentGame.set("players", old)
+    return "", 200
 
 
-# logout page
-@app.route("/logout")
-def logout():
-    session.pop("logged_in", None)
-    return redirect(url_for("login"))
+@app.route("/api/v1/crew_join", methods=["GET"])
+def crew_join():
+    old2 = currentGame.get("players")
+    crews = currentGame.get("crews")
+    if old2 == None:
+        old2 = {}
+    old = old2[str(request.args.get("steamID"))]
+    if old == None:
+        old = {}
+    old["crewID"] = request.args.get("crewID")
+    if crews == None:
+        crews = {}
+    if crews.get(request.args.get("crewID")) == None:
+        crews[request.args.get("crewID")] = "Unnamed Crew"
+    currentGame.set("players", old2)
+    return "", 200
 
 
-# change password
-@app.route("/change_password", methods=["GET", "POST"])
-def change_password():
-    if request.method == "POST":
-        print(request.form)
-        old_password = request.form["currentPassword"]
-        new_password = request.form["newPassword"]
-        new_password_repeat = request.form["confirmPassword"]
-        if passwords.get(session["username"]) != old_password:
-            return "Invalid password", 401
-        if new_password != new_password_repeat:
-            return "Passwords do not match", 401
-        # update password in the passwords workspace
-        return redirect(url_for("index"))
-    return render_template("change_password.html")
+@app.route("/api/v1/crew_rename", methods=["GET"])
+def crew_rename():
+    crews = currentGame.get("crews")
+    if crews == None:
+        crews = {}
+    crews[request.args.get("crewID")] = request.args.get("name")
+    currentGame.set("crews", crews)
+    return "", 200
 
 
-@app.route("/")
-def index():
-    # redirect to login if not logged in
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-    return render_template("index.html")
+@app.route("/api/v1/stop", methods=["GET"])
+def stop():
+    old1 = currentGame.get("players")
+    old1 = {}
+    old2 = currentGame.get("crews")
+    old2 = {}
+    currentGame.set("players", old1)
+    currentGame.set("crews", old2)
+    return "", 200
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(port=5000)
